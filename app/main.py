@@ -47,7 +47,7 @@ async def read_user(user_id: str, db_session: Annotated[AsyncSession, Depends(ge
         if user is None:
             logger.error(f"User not found: user_id={user_id}")
             raise HTTPException(
-                status_code=404, detail="Ticket not found"
+                status_code=404, detail="User not found"
             )
     except Exception as e:
         logger.exception(f"Error: {e}",stack_info=True)
@@ -63,7 +63,7 @@ async def read_users(db_session: Annotated[AsyncSession, Depends(get_db_session)
         users = await get_users(db_session)
         if users is None:
             raise HTTPException(
-                status_code=404, detail="Ticket not found"
+                status_code=404, detail="Users not found"
             )
     except Exception as e:
         logger.exception(f"Error: {e}",stack_info=True)
