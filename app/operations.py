@@ -15,30 +15,49 @@ from app.models import (
 )
 import bcrypt
 
+from app.logger import logger
+
 async def create_user(db_session: AsyncSession,user_data:UserCreateModel) ->  User:
-    new_user = User()
-    new_user.first_name = user_data.first_name
-    new_user.last_name = user_data.last_name
-    new_user.email = user_data.email
-    new_user.username = user_data.username
-    
-    # Hash the password securely
-    salt = bcrypt.gensalt()
-    hashed_password = bcrypt.hashpw(user_data.password_hash.encode('utf-8'), salt)
-    new_user.password_hash = hashed_password.decode('utf-8')
-
-
-    async with db_session.begin():
-        db_session.add(new_user)
-        await db_session.flush()
-        user_id = new_user.user_id
-        await db_session.commit()
-
+    try:
+        new_user = User()
+        new_user.first_name = user_data.first_name
+        new_user.last_name = user_data.last_name
+        new_user.email = user_data.email
+        new_user.username = user_data.username
+        # Hash the password securely
+        salt = bcrypt.gensalt()
+        hashed_password = bcrypt.hashpw(user_data.password_hash.encode('utf-8'), salt)
+        new_user.password_hash = hashed_password.decode('utf-8')
+        async with db_session.begin():
+            db_session.add(new_user)
+            await db_session.flush()
+            user_id = new_user.user_id
+            await db_session.commit()
+    except Exception as e:
+        logger.exception(f"Error: {e}",stack_info=True)
+        new_user = None   
     return new_user
 
 async def get_users(db_session: AsyncSession) -> list[User]:
-    async with db_session as session:
-        result = await session.execute(select(User).order_by(User.created_at.desc()))
-        users = result.scalars().all()
+    try:
+        async with db_session as session:
+            result = await session.execute(select(User).order_by(User.created_at.desc()))
+            users = result.scalars().all()
+    except Exception as e:
+        logger.exception(f"Error: {e}",stack_info=True)
+        users = None
     return users
+
+async def get_user_by_id(db_session: AsyncSession, user_id: str) -> list[User] | None:
+    try:
+        query = (select(User)
+            .where(User.user_id == user_id)
+        )
+        async with db_session as session:
+            result = await session.execute(query)
+            user = result.scalars().first()
+    except Exception as e:
+        logger.exception(f"Error: {e}",stack_info=True)
+        user = None
+    return user
 

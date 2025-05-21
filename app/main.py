@@ -10,7 +10,8 @@ from app.models import Base, User, UserCreateModel
 from app.database import get_db_session, get_engine
 from app.operations import (
     create_user,
-    get_users
+    get_users,
+    get_user_by_id
 )
 
 from app.logger import logger
@@ -25,20 +26,50 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(lifespan=lifespan)
 
-
+# Get all users
 @app.post("/users/")
 async def add_user(user_data:UserCreateModel, db_session: Annotated[AsyncSession, Depends(get_db_session)]):
-    logger.info(f"Creating user with data: {user_data}")
-    new_user:User = await create_user(db_session,user_data)
+    try:
+        new_user:User = await create_user(db_session,user_data)
+    except Exception as e:
+        logger.exception(f"Error: {e}",stack_info=True)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error"
+        )
     return new_user
+
+#get user by id
+@app.get("/users/{user_id}")
+async def read_user(user_id: str, db_session: Annotated[AsyncSession, Depends(get_db_session)]):
+    try:
+        user = await get_user_by_id(db_session, user_id)
+        if user is None:
+            logger.error(f"User not found: user_id={user_id}")
+            raise HTTPException(
+                status_code=404, detail="Ticket not found"
+            )
+    except Exception as e:
+        logger.exception(f"Error: {e}",stack_info=True)
+        raise HTTPException(
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error"
+        )
+    return user
 
 @app.get("/users/")
 async def read_users(db_session: Annotated[AsyncSession, Depends(get_db_session)]):
-    logger.info(f"Creating user with data")
-    users = await get_users(db_session)
-    if users is None:
+    try:
+        users = await get_users(db_session)
+        if users is None:
+            raise HTTPException(
+                status_code=404, detail="Ticket not found"
+            )
+    except Exception as e:
+        logger.exception(f"Error: {e}",stack_info=True)
         raise HTTPException(
-            status_code=404, detail="Ticket not found"
+            status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+            detail="Internal Server Error"
         )
     return users
 
