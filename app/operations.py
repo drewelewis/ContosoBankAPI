@@ -34,7 +34,7 @@ async def create_user(db_session: AsyncSession,user_data:UserCreateModel) ->  Us
             user_id = new_user.user_id
             await db_session.commit()
     except Exception as e:
-        logger.exception(f"Error: {e}",stack_info=True)
+        print(f"Error: {e}")
         new_user = None   
     return new_user
 
@@ -44,7 +44,7 @@ async def get_users(db_session: AsyncSession) -> list[User]:
             result = await session.execute(select(User).order_by(User.created_at.desc()))
             users = result.scalars().all()
     except Exception as e:
-        logger.exception(f"Error: {e}",stack_info=True)
+        print(f"Error: {e}")
         users = None
     return users
 
@@ -57,7 +57,7 @@ async def get_user_by_id(db_session: AsyncSession, user_id: str) -> list[User] |
             result = await session.execute(query)
             user = result.scalars().first()
     except Exception as e:
-        logger.exception(f"Error: {e}",stack_info=True)
+        print(f"Error: {e}")
         user = None
     return user
 
