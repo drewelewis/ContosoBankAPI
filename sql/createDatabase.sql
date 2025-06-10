@@ -13,5 +13,11 @@
         deleted_at TIMESTAMP
     );
 
+    
+-- create index on user_id
+    CREATE INDEX idx_users_email ON users (email);
+    CREATE INDEX idx_users_user_id ON users (user_id);
+
+
 
 

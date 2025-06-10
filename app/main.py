@@ -21,15 +21,22 @@ from app.logger import logger
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     engine = get_engine()
+    logger.info("[lifespan] Attempting to connect to the database...")
     async with engine.begin() as conn:
         await conn.run_sync(Base.metadata.create_all)
+        logger.info("[lifespan] Database connection established and tables created.")
         yield
     await engine.dispose()
+    logger.info("[lifespan] Database connection disposed.")
 
 app = FastAPI(lifespan=lifespan)
 
 # Get all users
-@app.get("/")
+# hide this from the docs
+
+
+
+@app.get("/" , include_in_schema=False)
 async def root():
     # redirect to /docs
     return RedirectResponse(url="/docs", status_code=status.HTTP_302_FOUND)
