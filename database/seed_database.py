@@ -1,8 +1,13 @@
 import asyncio
+import sys
+import os
 from faker import Faker
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import declarative_base, sessionmaker
 from sqlalchemy import Column, Integer, String
+
+# Add parent directory to path to import app modules
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from app.config import config
 from app.models import UserCreateModel

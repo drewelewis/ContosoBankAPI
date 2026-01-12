@@ -106,6 +106,69 @@ graph TB
 
 ### Quick Start
 
+**🚀 Fresh System Setup (Recommended)**
+
+1. **Clone the repository**
+   ```bash
+   git clone <repository-url>
+   cd ContosoBankAPI
+   ```
+
+2. **Start all services**
+   ```bash
+   # Windows
+   _up.bat
+   
+   # Linux/Mac
+   docker-compose up -d
+   ```
+
+3. **Set up database (automated)**
+   ```bash
+   # Windows - This will create database, tables, and seed test data
+   _setup_database.bat
+   ```
+
+4. **Create and activate Python environment**
+   ```bash
+   # Windows
+   _env_create.bat
+   _env_activate.bat
+   
+   # Manual setup
+   python -m venv .venv
+   source .venv/bin/activate  # Linux/Mac
+   .venv\Scripts\activate     # Windows
+   ```
+
+5. **Install dependencies**
+   ```bash
+   # Windows
+   _install.bat
+   
+   # Manual
+   pip install -r requirements.txt
+   ```
+
+6. **Start the application**
+   ```bash
+   # Windows
+   _run_server.bat
+   
+   # Manual
+   python main.py
+   ```
+
+7. **Access your application** 🎉
+   - API Documentation: http://localhost:8000/docs
+   - Database Admin: http://localhost:8082
+   - Elasticsearch: http://localhost:9200
+   - Kibana: http://localhost:5601
+
+---
+
+### Manual Setup (Alternative)
+
 1. **Clone the repository**
    ```bash
    git clone <repository-url>
@@ -145,16 +208,27 @@ graph TB
 5. **Set up environment variables**
    Create a `.env` file in the root directory:
    ```env
-   DATABASE_URL=postgresql+asyncpg://postgres:postgres@localhost:5432/postgres
+   DATABASE_URL="postgresql+asyncpg://postgres:postgres@localhost:5433/user_database"
+   DB_HOST=localhost
+   DB_PORT=5433
+   DB_USER=postgres
+   DB_PASSWORD=postgres
+   DB_NAME=user_database
+   DB_FORCE_ROLLBACK=False
    ELASTICSEARCH_HOST=localhost
    ELASTICSEARCH_PORT=9200
    ELASTICSEARCH_INDEX=contosobank-logs
-   ELASTICSEARCH_LOG_LEVEL=DEBUG
+   ELASTICSEARCH_LOG_LEVEL=logging.INFO
    ```
 
-6. **Seed the database** (Optional)
+6. **Set up the database**
    ```bash
-   python seed_database.py
+   # Windows - Automated setup (creates database, tables, and seeds data)
+   _setup_database.bat
+   
+   # Manual steps
+   python database/create_database.py  # Create database and tables
+   python database/seed_database.py    # Seed with test data
    ```
 
 7. **Start the application**
@@ -168,9 +242,29 @@ graph TB
 
 8. **Access the application**
    - API Documentation: http://localhost:8000/docs
-   - Database Admin: http://localhost:8080
+   - Database Admin: http://localhost:8082 (Adminer)
+   - Database Server: localhost:5433 (PostgreSQL - contosobank container)
    - Elasticsearch: http://localhost:9200
    - Kibana: http://localhost:5601
+
+### 🔐 Adminer Database Connection
+
+When accessing Adminer at http://localhost:8082, use these **exact** connection settings:
+
+| Field | Value | Notes |
+|-------|-------|-------|
+| **System** | `PostgreSQL` | Select from dropdown |
+| **Server** | `contosobank` | Container name (no port!) |
+| **Username** | `postgres` | Database user |
+| **Password** | `postgres` | Database password |
+| **Database** | `user_database` | Target database |
+
+⚠️ **Important**: 
+- Use `contosobank` (container name) **not** `localhost:5433` 
+- Don't include port number - Docker handles internal networking
+- Ensure no trailing spaces in server field
+
+---
 
 ## 📚 API Endpoints
 
@@ -333,12 +427,40 @@ The application uses Pydantic Settings for configuration management:
 
 ### Load Testing
 
-JMeter configuration is provided for performance testing:
+JMeter configuration is provided for comprehensive error and performance testing:
 
+**Test Configuration:**
+- **3 concurrent threads** (simulated users)
+- **3 second ramp-up time** 
+- **3 loops per thread**
+- **Total: 63 requests** across 7 test scenarios
+
+**Test Scenarios:**
+1. **Regular User Creation** - Baseline testing with random user data
+2. **Race Condition Testing** - Multiple threads creating same username to trigger concurrency bugs
+3. **Long Email Validation** - Tests validation limits with 100+ character emails
+4. **Empty Password Edge Cases** - Tests null/empty string handling
+5. **Memory Stress Testing** - Triggers large result sets without pagination limits
+6. **Invalid UUID Testing** - Tests malformed UUID handling in endpoints
+7. **Non-existent User Testing** - Tests edge cases with null UUIDs
+
+**Run the test:**
 ```bash
-# Run load tests
-jmeter -n -t loadtests/test1.jmx -l results.jtl
+# Run focused load test for error analysis
+jmeter -n -t loadtests/test.jmx -l results.jtl
+
+# View results in JMeter GUI
+jmeter -t loadtests/test.jmx
 ```
+
+**Expected Errors for Analysis:**
+- `IntegrityError`: Race conditions on duplicate usernames
+- `AttributeError`: Null/None value handling issues
+- `ValueError`: UUID parsing and validation failures
+- `MemoryError`: Large result set processing
+- Various HTTP status codes: 422, 500, 404
+
+This configuration generates realistic, organic errors perfect for AI log analysis without overwhelming the system.
 
 ### Database Testing
 
@@ -360,7 +482,7 @@ flowchart TD
     C --> D[Start Application]
     D --> E[Develop & Test]
     E --> F{Need Data?}
-    F -->|Yes| G[Run seed_database.py]
+    F -->|Yes| G[Run database/seed_database.py]
     F -->|No| H[Continue Development]
     G --> H
     H --> I[Test Changes]
@@ -386,7 +508,7 @@ flowchart TD
 2. **Database Migrations**: Use Alembic for schema changes
 3. **Logging**: Monitor application logs in Kibana
 4. **Testing**: Test endpoints using `/docs` interface
-5. **Data Seeding**: Use `seed_database.py` for development data
+5. **Data Seeding**: Use `database/seed_database.py` for development data
 
 ## 📊 Monitoring & Logging
 
@@ -394,35 +516,111 @@ flowchart TD
 
 ```mermaid
 graph LR
-    A[FastAPI App] --> B[Logger Module]
+    A[FastAPI App] --> B[Custom ElasticsearchHandler]
     B --> C[Console Handler]
-    B --> D[Elasticsearch Handler]
-    D --> E[Elasticsearch Index]
+    B --> D[Elasticsearch 9.2.3]
+    D --> E[contosobank-logs Index]
     E --> F[Kibana Dashboard]
 ```
 
+**Updated Architecture:**
+- ✅ **Custom ElasticsearchHandler**: Direct integration with Elasticsearch 9.2.3
+- ✅ **Native Elasticsearch Client**: Compatible with modern Elasticsearch versions
+- ✅ **Structured Logging**: Rich log data with operation IDs and error categorization
+- ✅ **Real-time Analytics**: Immediate log availability in Kibana for AI analysis
+
 ### Log Structure
+
+The application generates structured logs perfect for AI analysis:
 
 ```json
 {
-  "@timestamp": "2026-01-06T12:00:00Z",
-  "level": "INFO",
+  "@timestamp": "2026-01-12T12:03:33Z",
+  "level": "INFO|WARNING|ERROR",
   "logger": "contosobank-logs",
   "message": "User created successfully",
   "module": "operations",
   "function": "create_user",
+  "line": 73,
   "extra_data": {
     "user_id": "uuid-here",
-    "operation": "user_creation"
+    "operation": "user_creation",
+    "operation_id": "req_abc123"
   }
 }
 ```
 
+### Realistic Error Patterns Generated
+
+The JMeter load tests generate organic error patterns ideal for AI analysis:
+
+**Database Constraint Violations:**
+- String truncation errors (VARCHAR limits exceeded)
+- Duplicate username conflicts from race conditions
+- UUID validation failures
+
+**Application-Level Errors:**
+- Empty/null password validation
+- Memory pressure from large result sets
+- Malformed UUID handling
+
+**Success Scenarios:**
+- Normal user creation (201 Created)
+- User retrieval requests (200 OK)
+- Proper timestamp and ID generation
+
+### Setting Up Kibana Data View
+
+To view your application logs in Kibana for AI analysis, you need to create a data view:
+
+1. **Open Kibana** at http://localhost:5601
+
+2. **Navigate to Data Views**:
+   - Click the hamburger menu (☰) in the top left
+   - Go to **Management** → **Stack Management**
+   - In the left sidebar under **Kibana**, click **Data Views**
+
+3. **Check for New Data**:
+   - Click **Check for new data** to refresh available indices
+   - This will scan Elasticsearch for any new indices that have been created
+
+4. **Create Data View**:
+   - Look for a **Create data view** button or link
+   - If you don't see it, try running your JMeter tests first to generate log data
+
+5. **Configure the Data View**:
+   - **Name**: `ContosoBankAPI Logs`
+   - **Index pattern**: `contosobank-logs*`
+   - **Timestamp field**: `@timestamp` (if available)
+   - Click **Save data view to Kibana**
+
+6. **View Your Data**:
+   - Go to **Analytics** → **Discover**
+   - Select your `ContosoBankAPI Logs` data view from the dropdown
+   - You should now see your API logs with all the structured fields!
+
+**✅ Verified Working**: The logging system has been tested and confirmed working with:
+- Elasticsearch 9.2.3 compatibility
+- Successful log ingestion from JMeter load tests
+- Rich structured data including operation IDs, error types, and timing
+- Realistic error/success mix perfect for AI pattern analysis
+
+### AI Analysis Ready
+
+Your log data is now optimized for AI analysis with:
+- **Operation Correlation**: Each request has unique IDs for tracing
+- **Error Categorization**: Structured error types and causes
+- **Performance Metrics**: Timing data for bottleneck identification
+- **Context Preservation**: Full stack traces and parameter data
+- **Realistic Scenarios**: Organic errors from actual load testing
+
 ### Monitoring Endpoints
 
 - **Application Health**: Monitor `/docs` availability
-- **Database Health**: Check Adminer connection
-- **Elasticsearch Health**: Verify index creation in Kibana
+- **Database Health**: Check Adminer connection at http://localhost:8082
+- **Elasticsearch Health**: Verify cluster status at http://localhost:9200/_cluster/health
+- **Log Analytics**: Access structured logs via Kibana at http://localhost:5601
+- **Real-time Monitoring**: Live log streaming in Kibana Discover view
 
 ## 🔧 Troubleshooting
 

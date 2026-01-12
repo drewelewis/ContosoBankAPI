@@ -2,26 +2,26 @@ services:
 
   postgres:
     image: postgres:17.5
-    container_name: postgres
+    container_name: contosobank
     ports:
-      - "5432:5432"
+      - "5433:5432"
     environment:
-      POSTGRES_DB: postgres
+      POSTGRES_DB: user_database
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       PGDATA: /var/lib/postgresql/data/pgdata
 
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - contosobank_postgres_data:/var/lib/postgresql/data
   adminer:
     image: adminer
     container_name: adminer
     restart: always
     ports:
-      - 8080:8080
+      - 8082:8080
 
   elasticsearch:
-    image: docker.elastic.co/elasticsearch/elasticsearch:7.15.0
+    image: docker.elastic.co/elasticsearch/elasticsearch:9.2.3
     container_name: elasticsearch
     ports:
       - "9200:9200"
@@ -36,14 +36,26 @@ services:
     volumes:
       - elasticsearch_data:/usr/share/elasticsearch/data
   kibana:
-    image: docker.elastic.co/kibana/kibana:7.15.0
+    image: docker.elastic.co/kibana/kibana:9.2.3
     container_name: kibana
     ports:
       - "5601:5601"
     depends_on:
       - elasticsearch
 
+  elasticsearch-mcp:
+    image: docker.elastic.co/mcp/elasticsearch
+    container_name: elasticsearch_mcp
+    ports:
+      - "8080:8080"
+    environment:
+      ES_URL: ${ELASTICSEARCH_URL:-http://host.docker.internal:9200}
+      ES_SSL_SKIP_VERIFY: "true"
+    command: ["http", "--container-mode"]
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
 volumes:
-  postgres_data:
+  contosobank_postgres_data:
   elasticsearch_data:
 

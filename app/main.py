@@ -43,10 +43,39 @@ async def root():
 
 @app.post("/users/", status_code=status.HTTP_201_CREATED)
 async def add_user(user_data:UserCreateModel, db_session: Annotated[AsyncSession, Depends(get_db_session)]):
+    import uuid
+    request_id = str(uuid.uuid4())[:8]
+    
     try:
         new_user:User = await create_user(db_session,user_data)
+        if new_user is None:
+            logger.error(f"User creation failed", extra={
+                "request_id": request_id,
+                "endpoint": "POST /users/",
+                "username": user_data.username,
+                "email": user_data.email,
+                "error_type": "creation_failed"
+            })
+            raise HTTPException(
+                status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
+                detail="Failed to create user"
+            )
+            
+        logger.info(f"User creation endpoint successful", extra={
+            "request_id": request_id,
+            "endpoint": "POST /users/",
+            "username": user_data.username  # Use input data instead of DB object
+        })
+        
+    except HTTPException:
+        raise  # Re-raise HTTP exceptions
     except Exception as e:
-        logger.exception(f"Error: {e}",stack_info=True)
+        logger.exception(f"Unexpected error in add_user endpoint: {e}", extra={
+            "request_id": request_id,
+            "endpoint": "POST /users/",
+            "error_type": "unexpected_error",
+            "error_details": str(e)
+        })
         raise HTTPException(
             status_code=HTTPStatus.INTERNAL_SERVER_ERROR,
             detail="Internal Server Error"
